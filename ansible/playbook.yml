@@ -1,0 +1,37 @@
+- name: Task 1
+  hosts: server2
+  become: true
+
+  tasks:
+
+    - name: Install Nginx
+      apt:
+        name: nginx
+        state: present
+        update_cache: yes
+
+    - name: Current Conf Backup
+      copy:
+        src: /etc/nginx/nginx.conf
+        dest: /etc/nginx/nginx.conf.bak
+        remote_src: yes
+
+    - name: Deploy New  conf
+      template:
+        src: templates/nginx.conf.j2
+        dest: /etc/nginx/nginx.conf
+
+    - name: Test Conf
+      command: nginx -t
+      register: result
+
+    - name: Rollback If Fail
+      copy:
+        src: /etc/nginx/nginx.conf.bak
+        dest: /etc/nginx/nginx.conf
+        remote_src: yes
+      when: result.rc != 0
+
+    - name: Reload If Passed
+      command: nginx -s reload
+      when: result.rc == 0

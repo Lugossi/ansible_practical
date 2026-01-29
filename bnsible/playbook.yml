@@ -1,0 +1,52 @@
+- name: Task2
+  hosts: server2
+  become: yes
+
+  tasks:
+
+    - name: Disable PasswdAuth && RootLogin
+      block:
+        - lineinfile:
+            path: /etc/ssh/sshd_config
+            regexp: '^PermitRootLogin'
+            line: 'PermitRootLogin no'
+        - lineinfile:
+            path: /etc/ssh/sshd_config
+            regexp: '^PasswordAuthentication'
+            line: 'PasswordAuthentication no'
+      notify: Restart SSH
+
+    - name: Enable Firewall && Don't Lock Us Out :)
+      block:
+        - package:
+            name: ufw
+            state: present
+        - ufw:
+            state: enabled
+            rule: allow
+            port: 22
+
+    - name: Checks
+      block:
+        - shell: "grep -i '^PermitRootLogin no' /etc/ssh/sshd_config"
+          register: root
+          ignore_errors: yes
+        - shell: "grep -i '^PasswordAuthentication no' /etc/ssh/sshd_config"
+          register: passauth
+          ignore_errors: yes
+        - shell: "ufw status | grep -i active"
+          register: fw
+          ignore_errors: yes
+
+    - name: Reporting
+      delegate_to: localhost
+      lineinfile:
+        path: "/root/bnsible/security_report.txt"
+        create: yes
+        line: "{{ inventory_hostname }} | RootLogin={{ 'OK' if root.rc==0 else 'NOT OK' }} | PasswordAuth={{ 'OK' if passauth.rc==0 else 'NOT OK' }} | Firewall={{ 'OK' if fw.rc==0 else 'NOT OK' }}"
+
+  handlers:
+    - name: Restart SSH
+      service:
+        name: ssh
+        state: restarted
